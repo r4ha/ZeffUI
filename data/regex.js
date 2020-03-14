@@ -105,7 +105,7 @@ var regexList =
 		regex: "] 15:",
 		matches: [
 			{
-				"regex": "(?<playerid>[A-F0-9]{8}):(?<player>[a-zA-Z-' ]{2,31}):(?<skillid>[A-F0-9]{2,4}):(?<skillname>.*):(?<targetid>[A-F0-9]{8})?:(?<target>[a-zA-Z-' ]{2,31})?:(?<power>\\d)?",
+				"regex": "(?<playerid>[A-F0-9]{8}):(?<player>[a-zA-Z-' ]{2,31}):(?<skillid>[A-F0-9]{2,4}):(?<skillname>.*):(?<targetid>[A-F0-9]{8})?:(?<target>.*)?:(?<power>\\d)?",
 				"function": "handleSkill"
 			}
 		]
@@ -114,7 +114,7 @@ var regexList =
 		regex: "] 16:",
 		matches: [
 			{
-				"regex": "(?<playerid>[A-F0-9]{8}):(?<player>[a-zA-Z-' ]{2,31}):(?<skillid>[A-F0-9]{2,4}):(?<skillname>.*):(?<targetid>[A-F0-9]{8})?:(?<target>[a-zA-Z-' ]{2,31})?:(?<power>\\d)?",
+				"regex": "(?<playerid>[A-F0-9]{8}):(?<player>[a-zA-Z-' ]{2,31}):(?<skillid>[A-F0-9]{2,4}):(?<skillname>.*):(?<targetid>[A-F0-9]{8})?:(?<target>.*)?:(?<power>\\d)?",
 				"function": "handleSkill"
 			}
 		]
