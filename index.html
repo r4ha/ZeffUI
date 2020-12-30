@@ -1,6 +1,8 @@
+<!DOCTYPE html lang="en">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jquery/3.5.1/jquery.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jqueryui/1.12.1/jquery-ui.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-contextmenu/2.9.0/jquery.contextMenu.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jquery-contextmenu/2.9.2/jquery.contextMenu.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/interactjs/dist/interact.min.js"></script>
 <script src="https://kit.fontawesome.com/2a15db2084.js"></script>
 <script src="https://ngld.github.io/OverlayPlugin/assets/shared/common.min.js"></script>
 <script src="data/regex.js"></script>
@@ -17,8 +19,15 @@
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/jquery-contextmenu/2.9.0/jquery.contextMenu.css" />
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.12.0/css/fontawesome.min.css" />
 <script>
+// ZeffUI globals
+/* global abilityList, jobList, regexList, language */
+
+// External Globals
+/* global addOverlayListener, startOverlayEvents, interact */
+
 var locked = true;
 var gridshown = false;
+var dragPosition = {};
 const UPDATE_INTERVAL = 10;
 
 var inCombat = false;
@@ -39,36 +48,13 @@ var activeBuffBars = new Map();
 var activeRaidBuffs = new Map();
 var activeMitigations = new Map();
 var activeCountdowns = new Map();
+var activeTTS = new Map();
 
-var isDraggingRightElement = false;
+var ttsElements = new Map();
 
 $(function() {
 	loadSettings();
 	toggleHideOutOfCombatElements();
-	$("[id$=bar]").draggable(
-		{
-			//https://blog.praveen.science/changing-the-origins-of-draggable-possible/
-			drag: function() {
-				if($(this).css("right") != null){
-					isDraggingRightElement = true;
-					$(this).css({
-						"right": "auto"
-					});
-				}
-			},
-			stop: function () {
-				if(isDraggingRightElement){
-					$(this).css({
-						"right": ($(window).width() - ($(this).offset().left + $(this).outerWidth())),
-						"left": "auto"
-					});
-					isDraggingRightElement = false;
-				}				
-				saveSettings();
-			}
-		}
-	);
-	$("[id$=bar]").draggable("disable");
 });
 
 // Thanks MikeMatrix
@@ -118,7 +104,8 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.healthbar, "textenabled", true);
 	checkAndInitializeSetting(settings.healthbar, "color", "--filter-dark-green");
 	checkAndInitializeSetting(settings.healthbar, "scale", 1);
-	checkAndInitializeSetting(settings.healthbar, "x", 0);
+	checkAndInitializeSetting(settings.healthbar, "rotation", 0);
+	checkAndInitializeSetting(settings.healthbar, "x", 30);
 	checkAndInitializeSetting(settings.healthbar, "y", 216);
 	checkAndInitializeSetting(settings.healthbar, "font", "Arial");
 
@@ -130,6 +117,8 @@ function loadSettings(){
 	$("#health-bar").css("left", settings.healthbar.x);
 	$("#health-bar").css("top", settings.healthbar.y);
 	$("#health-bar").css("--healthFont", settings.healthbar.font);
+	$("#health-bar").css("-webkit-transform", `rotate(${settings.healthbar.rotation}deg)`);
+	$("#health-bar").css("transform-origin", "top left");
 
 	// MANABAR SETTINGS
 	checkAndInitializeSetting(settings, "manabar", {});
@@ -138,7 +127,8 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.manabar, "textenabled", true);
 	checkAndInitializeSetting(settings.manabar, "color", "--filter-light-pink");
 	checkAndInitializeSetting(settings.manabar, "scale", 1);
-	checkAndInitializeSetting(settings.manabar, "x", 0);
+	checkAndInitializeSetting(settings.manabar, "rotation", 0);
+	checkAndInitializeSetting(settings.manabar, "x", 30);
 	checkAndInitializeSetting(settings.manabar, "y", 232);
 	checkAndInitializeSetting(settings.manabar, "font", "Arial");
 
@@ -150,6 +140,8 @@ function loadSettings(){
 	$("#mana-bar").css("left", settings.manabar.x);
 	$("#mana-bar").css("top", settings.manabar.y);
 	$("#mana-bar").css("--manaFont", settings.manabar.font);
+	$("#mana-bar").css("-webkit-transform", `rotate(${settings.manabar.rotation}deg)`);
+	$("#mana-bar").css("transform-origin", "top left");
 
 	// PULLTIMER SETTINGS
 	checkAndInitializeSetting(settings, "timerbar", {});
@@ -157,7 +149,8 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.timerbar, "textenabled", true);
 	checkAndInitializeSetting(settings.timerbar, "color", "--filter-dark-red");
 	checkAndInitializeSetting(settings.timerbar, "scale", 1);
-	checkAndInitializeSetting(settings.timerbar, "x", 0);
+	checkAndInitializeSetting(settings.timerbar, "rotation", 0);
+	checkAndInitializeSetting(settings.timerbar, "x", 30);
 	checkAndInitializeSetting(settings.timerbar, "y", 200);
 	checkAndInitializeSetting(settings.timerbar, "font", "Arial");
 
@@ -167,6 +160,8 @@ function loadSettings(){
 	$("#timer-bar").css("left", settings.timerbar.x);
 	$("#timer-bar").css("top", settings.timerbar.y);
 	$("#timer-bar").css("--timerFont", settings.timerbar.font);
+	$("#timer-bar").css("-webkit-transform", `rotate(${settings.timerbar.rotation}deg)`);
+	$("#timer-bar").css("transform-origin", "top left");
 
 	// DOT TIMER SETTINGS
 	checkAndInitializeSetting(settings, "dottimerbar", {});
@@ -175,12 +170,14 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.dottimerbar, "hidewhendroppedoff", false);
 	checkAndInitializeSetting(settings.dottimerbar, "textenabled", true);
 	checkAndInitializeSetting(settings.dottimerbar, "imageenabled", true);
+	checkAndInitializeSetting(settings.dottimerbar, "ttsenabled", false);
 	checkAndInitializeSetting(settings.dottimerbar, "multidotenabled", true);
 	checkAndInitializeSetting(settings.dottimerbar, "growdirection", 1);
 	checkAndInitializeSetting(settings.dottimerbar, "padding", 20);
 	checkAndInitializeSetting(settings.dottimerbar, "scale", 1);
-	checkAndInitializeSetting(settings.dottimerbar, "x", 0);
-	checkAndInitializeSetting(settings.dottimerbar, "y", 100);
+	checkAndInitializeSetting(settings.dottimerbar, "rotation", 0);
+	checkAndInitializeSetting(settings.dottimerbar, "x", 30);
+	checkAndInitializeSetting(settings.dottimerbar, "y", 50);
 	checkAndInitializeSetting(settings.dottimerbar, "font", "Arial");
 
 	$("#dot-timer-bar").css("width", settings.dottimerbar.scale * 154);
@@ -188,6 +185,8 @@ function loadSettings(){
 	$("#dot-timer-bar").css("left", settings.dottimerbar.x);
 	$("#dot-timer-bar").css("top", settings.dottimerbar.y);
 	$("#dot-timer-bar").css("--dotFont", settings.dottimerbar.font);
+	$("#dot-bar").css("-webkit-transform", `rotate(${settings.dottimerbar.rotation}deg)`);
+	$("#dot-bar").css("transform-origin", "center");
 
 	// BUFF TIMER SETTINGS
 	checkAndInitializeSetting(settings, "bufftimerbar", {});
@@ -196,10 +195,12 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.bufftimerbar, "hidewhendroppedoff", false);
 	checkAndInitializeSetting(settings.bufftimerbar, "textenabled", true);
 	checkAndInitializeSetting(settings.bufftimerbar, "imageenabled", true);
+	checkAndInitializeSetting(settings.bufftimerbar, "ttsenabled", false);
 	checkAndInitializeSetting(settings.bufftimerbar, "growdirection", 1);
 	checkAndInitializeSetting(settings.bufftimerbar, "padding", 20);
 	checkAndInitializeSetting(settings.bufftimerbar, "scale", 1);
-	checkAndInitializeSetting(settings.bufftimerbar, "x", 0);
+	checkAndInitializeSetting(settings.bufftimerbar, "rotation", 0);
+	checkAndInitializeSetting(settings.bufftimerbar, "x", 30);
 	checkAndInitializeSetting(settings.bufftimerbar, "y", 100);
 	checkAndInitializeSetting(settings.bufftimerbar, "font", "Arial");
 
@@ -208,6 +209,8 @@ function loadSettings(){
 	$("#buff-timer-bar").css("left", settings.bufftimerbar.x);
 	$("#buff-timer-bar").css("top", settings.bufftimerbar.y);
 	$("#buff-timer-bar").css("--buffFont", settings.bufftimerbar.font);
+	$("#buff-bar").css("-webkit-transform", `rotate(${settings.bufftimerbar.rotation}deg)`);
+	$("#buff-bar").css("transform-origin", "center");
 
 	// STACKBAR SETTINGS
 	checkAndInitializeSetting(settings, "stacksbar", {});
@@ -215,7 +218,7 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.stacksbar, "hideoutofcombat", false);
 	checkAndInitializeSetting(settings.stacksbar, "color", "--filter-bright-red");
 	checkAndInitializeSetting(settings.stacksbar, "scale", 1);
-	checkAndInitializeSetting(settings.stacksbar, "x", 0);
+	checkAndInitializeSetting(settings.stacksbar, "x", 30);
 	checkAndInitializeSetting(settings.stacksbar, "y", 170);
 
 	settings.stacksbar.enabled ? $("#stacks-bar").show() : $("#stacks-bar").hide();
@@ -234,6 +237,7 @@ function loadSettings(){
 	// RAIDBUFF SETTINGS
 	checkAndInitializeSetting(settings, "raidbuffs", {});
 	checkAndInitializeSetting(settings.raidbuffs, "enabled", true);
+	checkAndInitializeSetting(settings.raidbuffs, "ttsenabled", false);
 	checkAndInitializeSetting(settings.raidbuffs, "alwaysshow", true);
 	checkAndInitializeSetting(settings.raidbuffs, "hideoutofcombat", false);
 	checkAndInitializeSetting(settings.raidbuffs, "hidewhensolo", false);
@@ -241,8 +245,8 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.raidbuffs, "padding", 0);
 	checkAndInitializeSetting(settings.raidbuffs, "scale", 1);
 	checkAndInitializeSetting(settings.raidbuffs, "columns", 8);
-	checkAndInitializeSetting(settings.raidbuffs, "x", 0);
-	checkAndInitializeSetting(settings.raidbuffs, "y", 216);
+	checkAndInitializeSetting(settings.raidbuffs, "x", 30);
+	checkAndInitializeSetting(settings.raidbuffs, "y", 240);
 	checkAndInitializeSetting(settings.raidbuffs, "font", "Arial");
 
 	settings.raidbuffs.enabled ? $("#raid-buffs-bar").show() : $("#raid-buffs-bar").hide();
@@ -255,6 +259,7 @@ function loadSettings(){
 	// MITIGATION SETTINGS
 	checkAndInitializeSetting(settings, "mitigation", {});
 	checkAndInitializeSetting(settings.mitigation, "enabled", true);
+	checkAndInitializeSetting(settings.mitigation, "ttsenabled", false);
 	checkAndInitializeSetting(settings.mitigation, "alwaysshow", true);
 	checkAndInitializeSetting(settings.mitigation, "hideoutofcombat", false);
 	checkAndInitializeSetting(settings.mitigation, "hidewhensolo", false);
@@ -262,8 +267,8 @@ function loadSettings(){
 	checkAndInitializeSetting(settings.mitigation, "padding", 0);
 	checkAndInitializeSetting(settings.mitigation, "scale", 1);
 	checkAndInitializeSetting(settings.mitigation, "columns", 8);
-	checkAndInitializeSetting(settings.mitigation, "x", 0);
-	checkAndInitializeSetting(settings.mitigation, "y", 240);
+	checkAndInitializeSetting(settings.mitigation, "x", 30);
+	checkAndInitializeSetting(settings.mitigation, "y", 280);
 	checkAndInitializeSetting(settings.mitigation, "font", "Arial");
 	
 	settings.mitigation.enabled ? $("#mitigation-bar").show() : $("#mitigation-bar").hide();
@@ -285,13 +290,15 @@ function loadContextMenu(){
 		selector: "body", 
 		callback: function(key) {
 			switch(key){
-			case "lock":
+			case "lock":{
 				toggleLock();
 				break;
-			case "grid":
+			}
+			case "grid":{
 				toggleGrid();
 				break;
-			case "settings":
+			}
+			case "settings":{
 				let openSettings = window.open("settings.html");
 				var settingsTimer = setInterval(function() {   
 					if(openSettings.closed) {  
@@ -302,6 +309,7 @@ function loadContextMenu(){
 					}  
 				}, 1000); 
 				break;
+			}				
 			}
 		},
 		items: {
@@ -314,31 +322,15 @@ function loadContextMenu(){
 	});
 }
 
-function importSettings(){
-	$(`<div>
-			<br />
-			Copy in your settings string to import <br />
-			<input type="text" placeholder="Copy settings string here" id="settingstext"><br />
-			<span id="importalert"></span>
-		</div>`).dialog({
-		modal: true,
-		title: "Import Settings",
-		buttons: {
-			"OK": function (){
-				let settings = JSON.parse(atob($("#settingstext").val()));
-				if(settings.hasOwnProperty("healthbar")){
-					localStorage.setItem("settings", JSON.stringify(settings));
-					loadSettings();
-					$(this).dialog("close");
-				}else{
-					$("#importalert").text("Invalid settings string, please doublecheck what you have pasted in.");
-				}
-			},
-			"Cancel": function () {
-				$(this).dialog("close");
-			}
-		}
-	});
+function setGoogleTTS(text){
+	let iframe = document.createElement("iframe");
+	iframe.removeAttribute("sandbox");
+	iframe.style.display = "none";
+	document.body.appendChild(iframe);
+	let encText = encodeURIComponent(text);
+	iframe.contentDocument.body.innerHTML = "<audio src=\"https://translate.google.com/translate_tts?ie=UTF-8&client=tw-ob&tl=" + currentSettings.language + "&q=" + encText + "\" id=\"TTS\">";
+	this.item = iframe.contentDocument.body.firstElementChild;
+	return this.item;
 }
 
 function saveSettings(){	
@@ -382,25 +374,6 @@ function saveSettings(){
 	currentSettings.mitigation.y = parseInt($("#mitigation-bar").css("top").replace("px", ""));
 	
 	localStorage.setItem("settings", JSON.stringify(currentSettings));
-}
-
-function exportSettings(){
-	if(localStorage.getItem("settings") == null){
-		saveSettings();
-	}
-	$(`<div>
-			<br />
-			Copy this string and keep it safe! <br />
-			<input type="text" value="${btoa(localStorage.getItem("settings"))}" onclick="this.select();"">
-		</div>`).dialog({
-		modal: true,
-		title: "Export Settings",
-		buttons: {
-			"OK": function (){
-				$(this).dialog("close");
-			}
-		}
-	});
 }
 
 function startBarTimer(duration, selector, hideTimer = false){
@@ -530,11 +503,14 @@ function generateRaidBuffs(){
 	let playerIndex = 0;
 	for(let partyMember of currentPartyList){
 		for(let ability of abilityList.filter(x => x.type === "RaidBuff" && x.job === partyMember.job.name && x.level <= currentPlayer.level)){
+			if(currentSettings.override.abilities.some(x => x.name === ability.name)){
+				ability = currentSettings.override.abilities.find(x => x.name === ability.name);
+			}
 			let pushAbility = true;
 			if(ability.hasOwnProperty("extra")){
 				if(ability.extra.hasOwnProperty("is_card") || ability.extra.hasOwnProperty("is_song") || ability.extra.hasOwnProperty("is_ss") || ability.extra.hasOwnProperty("is_ts")) pushAbility = false;
 			}
-			if(pushAbility){
+			if(pushAbility && ability.enabled){
 				raidAbilityList.push({
 					player: partyMember,
 					playerIndex: playerIndex,
@@ -553,11 +529,14 @@ function generateMitigation(){
 	let playerIndex = 0;
 	let currentJob = jobList.find(x => x.name === currentPlayer.job);
 	for(let ability of abilityList.filter(x => x.type === "Mitigation" && x.level <= currentPlayer.level)){
+		if(currentSettings.override.abilities.some(x => x.name === ability.name)){
+			ability = currentSettings.override.abilities.find(x => x.name === ability.name);
+		}
 		let pushAbility = false;
 		if(ability.job === currentJob.name || ability.job === currentJob.type){
 			pushAbility = true;
 		}
-		if(pushAbility){
+		if(pushAbility && ability.enabled){
 			mitigationAbilityList.push({
 				player: currentPlayer.name,
 				playerIndex: playerIndex,
@@ -668,6 +647,9 @@ function startAbilityIconTimers(playerIndex, ability, onYou = true, abilityHolde
 		stopAbilityTimer(`${selector}-cooldown`, null);
 		stopAbilityTimer(`${selector}-duration`, null);
 	}
+	
+	handleAbilityTTS(ability, selector, onYou);
+	
 	if(onYou){
 		if(!selectedSettings.alwaysshow){
 			generateAbilityIcon(playerIndex, ability, Math.ceil(selectedActive.size / selectedSettings.columns), true);
@@ -703,6 +685,79 @@ function startAbilityIconTimers(playerIndex, ability, onYou = true, abilityHolde
 	}
 }
 
+function startTTSTimer(duration, selector, text, timeWhen = 2000){
+	if(!ttsElements.has(selector)){
+		ttsElements[selector] = setGoogleTTS(text);
+	}
+
+	let timems = duration * 1000;
+	let timeLeft = timems;
+	let ttsTimer = setInterval(function(){
+		timeLeft -= UPDATE_INTERVAL;
+		if(timeLeft <= timeWhen){
+			ttsElements[selector].play();
+			clearInterval(ttsTimer);
+			setTimeout(function(){
+			}, UPDATE_INTERVAL);	
+		}
+	}, UPDATE_INTERVAL);
+	activeTTS.set(selector, ttsTimer);
+}
+
+function handleAbilityTTS(ability, selector, onYou = true){
+	if(activeTTS.has(selector)) clearInterval(activeTTS.get(selector));
+	switch(ability.type){
+	case "DoT":
+		if(!currentSettings.dottimerbar.ttsenabled) return;
+		break;
+	case "Buff":
+		if(!currentSettings.bufftimerbar.ttsenabled) return;
+		break;
+	case "RaidBuff":
+		if(!currentSettings.raidbuffs.ttsenabled) return;
+		break;
+	case "Mitigation":
+		if(!currentSettings.mitigation.ttsenabled) return;
+		break;
+	default:
+		break;
+	}
+
+	let name = ability.name;
+	switch(currentSettings.language){
+	case "en":
+		name = ability.name_en;
+		break;
+	case "de":
+		name = ability.name_de;
+		break;
+	case "fr":
+		name = ability.name_fr;
+		break;
+	case "jp":
+		name = ability.name_jp;
+		break;
+	default:
+		break;
+	}
+	if(ability.tts){
+		switch(ability.ttstype){
+		case 0:
+			startTTSTimer(ability.cooldown, selector, name);
+			break;
+		case 1: 
+			startTTSTimer(ability.duration, selector, name);
+			break;
+		case 2:
+			if(!onYou && ability.type == "RaidBuff") return;
+			startTTSTimer(0, selector, name, 0);
+			break;
+		default:
+			break;
+		}
+	}
+}
+
 function clearGrid(){
 	let canvas = $("#grid").attr({width: window.innerWidth, height: window.innerHeight});
 	let canvasContext = $("#grid").get(0).getContext("2d");
@@ -710,28 +765,49 @@ function clearGrid(){
 }
 
 function toggleLock(){
+	interact("[id$=bar]").draggable({
+		enabled: locked,
+		listeners: {
+			start (event) {
+				if(!dragPosition[event.target.id]) dragPosition[event.target.id] = {};
+				dragPosition[event.target.id].x = parseInt(event.target.style.left.replace("px", ""));
+				dragPosition[event.target.id].y = parseInt(event.target.style.top.replace("px", ""));
+			},
+			move (event) {
+				dragPosition[event.target.id].x += event.dx;
+				dragPosition[event.target.id].y += event.dy;
+				event.target.style.left = `${dragPosition[event.target.id].x}px`;
+				event.target.style.top = `${dragPosition[event.target.id].y}px`;
+			},
+			end () {
+				saveSettings();
+			}
+		}
+	});
 	if(locked){
 		$("#timer-bar").show();
 		$("#dot-timer-bar").show();
 		$("#buff-timer-bar").show();
 		if(currentSettings.raidbuffs.hidewhensolo && currentPartyList.length == 1) $("#raid-buffs-bar").show();
-		$("[id$=bar]").draggable("enable");
+		//$("[id$=bar]").draggable("enable");
 		adjustJobStacks(2,4, true);
 		if(!inCombat){
 			toggleHideOutOfCombatElements();
 		}
 		locked = false;
+		$("html").css("border", "solid");
 	}else{
 		$("#timer-bar").hide();
 		$("#dot-timer-bar").hide();
 		$("#buff-timer-bar").hide();
 		if(currentSettings.raidbuffs.hidewhensolo && currentPartyList.length == 1) $("#raid-buffs-bar").hide();
-		$("[id$=bar]").draggable("disable");
+		//$("[id$=bar]").draggable("disable");
 		adjustJobStacks(currentStats.stacks, currentStats.maxStacks, true);
 		if(!inCombat){
 			toggleHideOutOfCombatElements();
 		}
 		locked = true;
+		$("html").css("border", "none");
 	}	
 }
 
@@ -808,7 +884,6 @@ addOverlayListener("PartyChanged", (e) => onPartyChanged(e));
 startOverlayEvents();
 
 function onPlayerChangedEvent(e){
-	let changePartyList = false;
 	if(currentPlayer !== null && currentPlayer.job !== e.detail.job){
 		if(e.detail.job === "SMN") {
 			initializeSmn();
@@ -817,7 +892,6 @@ function onPlayerChangedEvent(e){
 		resetTimers();
 		if(currentPartyList.length === 1){
 			currentPartyList = [];
-			changePartyList = true;
 		}
 	}
 	currentPlayer = e.detail;
@@ -855,14 +929,27 @@ function onLogEvent(e){
 	}
 }
 
-function onPartyWipe(e){
+/* exported testLog */
+function testLog(logLine){
+	let logEvent = {
+		type: "onLogEvent",
+		detail: {
+			logs: [
+				logLine
+			]
+		}
+	};
+	onLogEvent(logEvent);
+}
+
+function onPartyWipe(){
 	if(currentPlayer.job === "SMN") initializeSmn();
 	resetTimers();
 	generateRaidBuffs();
 	generateMitigation();
 }
 
-function onChangeZone(e){
+function onChangeZone(){
 	resetTimers();
 }
 
@@ -906,39 +993,44 @@ function onInCombatChangedEvent(e){
 	toggleHideOutOfCombatElements();
 }
 
+/* exported startCountdownTimer */
 function startCountdownTimer(parameters){
 	startBarTimer(parameters.seconds, "#timer-bar", true);
 }
 
-function onInstanceStart(parameters){
+/* exported onInstanceStart */
+function onInstanceStart(){
 	generateRaidBuffs();
 	generateMitigation();
 }
 
-function onInstanceEnd(parameters){
+/* exported onInstanceEnd */
+function onInstanceEnd(){
 	resetTimers();
 	generateRaidBuffs();
 	generateMitigation();
 }
 
+/* exported handlePlayerStats */
 function handlePlayerStats(parameters){
 	currentStats.skillSpeed = (1000 + Math.floor(130 * (parameters.sks - 380) / 3300)) / 1000;
 	currentStats.spellSpeed = (1000 + Math.floor(130 * (parameters.sps - 380) / 3300)) / 1000;
 }
 
+/* exported handleEffect */
 function handleEffect(parameters){
 	let byYou = (parameters.player === currentPlayer.name);
 	let onYou = (parameters.target === currentPlayer.name);
 	let playerIndex = currentPartyList.findIndex(x => x.name === parameters.player);
 	let ability = undefined;
-	for (ability of abilityList.filter(x => x[`name_${currentSettings.language}`] == parameters.effect)){
+	for (ability of abilityList.filter(x => x[`name_${currentSettings.language}`].toLowerCase() == parameters.effect.toLowerCase())){
 		if(ability === undefined) return;
 		if(currentSettings.override.abilities.some(x => x.name === ability.name)){
 			ability = currentSettings.override.abilities.find(x => x.name === ability.name);
 		}
 		if(!ability.enabled) return;
 		if(ability.type === "RaidBuff"){
-			if(ability.name === "Standard Step" || ability.name === "Technical Step") return;
+			if(ability.name === "Standard Step" || ability.name === "Technical Step" || ability.name === "Embolden") return;
 			if(ability.hasOwnProperty("extra")){
 				if(ability.extra.is_song){
 					let abilityHolder = abilityList.find(x => x.name === "Song");
@@ -976,17 +1068,16 @@ function handleEffect(parameters){
 			let targetImageSelector = `#${ability.type.toLowerCase()}-image`;
 			let selectorBar = `#${ability.id}-${ability.type.toLowerCase()}-timer`;
 			let selectorImage = `#${ability.id}-${ability.type.toLowerCase()}-image`;
-			if(!activeDotBars.has(ability.id) && !activeBuffBars.has(ability.id) ){
-				let activeCount = 0;
+			ability.duration = parseInt(parameters.duration);
+			handleAbilityTTS(ability, selectorBar, onYou);
+			if(!activeDotBars.has(ability.id) && !activeBuffBars.has(ability.id)){
 				switch(ability.type){
 				case "DoT":{
 					activeDotBars.set(ability.id, selectorBar);
-					activeCount = activeDotBars.size;
 					break;
 				}
 				case "Buff":{
 					activeBuffBars.set(ability.id, selectorBar);
-					activeCount = activeBuffBars.size;
 					break;
 				}
 				}
@@ -1003,25 +1094,25 @@ function handleEffect(parameters){
 				$(targetBarSelector).attr("data-font-size", currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 10);
 
 				switch(parseInt(currentSettings[`${ability.type.toLowerCase()}timerbar`].growdirection)){
-				case 1: {
+				case 1:{
 					// Down					
 					$(selectorBar).css("left", $(targetBarSelector).css("left"));
 					$(selectorBar).css("top", parseInt($(targetBarSelector).css("top").replace("px", "")) + (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order));
 					break;
 				}
-				case 2: {
+				case 2:{
 					// Up
 					$(selectorBar).css("left", $(targetBarSelector).css("left"));
 					$(selectorBar).css("top", parseInt($(targetBarSelector).css("top").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order));
 					break;
 				}
-				case 3: {
+				case 3:{
 					// Left
 					$(selectorBar).css("top", $(targetBarSelector).css("top"));
 					$(selectorBar).css("left", parseInt($(targetBarSelector).css("left").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order));
 					break;
 				}
-				case 4: {
+				case 4:{
 					// Right
 					$(selectorBar).css("top", $(targetBarSelector).css("top"));
 					$(selectorBar).css("left", parseInt($(targetBarSelector).css("left").replace("px", "")) + (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order));
@@ -1035,33 +1126,38 @@ function handleEffect(parameters){
 					$(selectorImage).css("image-rendering", currentSettings[`${ability.type.toLowerCase()}timerbar`].scale > 1 ? "pixelated" : "-webkit-optimize-contrast" );
 					$(selectorImage).css("height", currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 22);
 
-					switch(parseInt(currentSettings[`${ability.type.toLowerCase()}timerbar`].growdirection)){
-					case 1: {
-						// Down					
-						$(selectorImage).css("left", parseInt($(targetBarSelector).css("left").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20));
-						$(selectorImage).css("top", parseInt($(targetBarSelector).css("top").replace("px", "")) + (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4));
-						break;
-					}
-					case 2: {
-						// Up
-						$(selectorImage).css("left", parseInt($(targetBarSelector).css("left").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20));
-						$(selectorImage).css("top", parseInt($(targetBarSelector).css("top").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4));
-						break;
-					}
-					case 3: {
-						// Left
-						$(selectorImage).css("top", parseInt($(targetBarSelector).css("top").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4));
-						$(selectorImage).css("left", parseInt($(targetBarSelector).css("left").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20));
-						break;
-					}
-					case 4: {
-						// Right
-						$(selectorImage).css("top", parseInt($(targetBarSelector).css("top").replace("px", "")) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4));
-						$(selectorImage).css("top", parseInt($(targetBarSelector).css("top").replace("px", "")) + (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20));
-						break;
-					}
-					}
+					let left = parseInt($(targetBarSelector).css("left").replace("px", ""));
+					let top = parseInt($(targetBarSelector).css("top").replace("px", ""));
 					
+					switch(parseInt(currentSettings[`${ability.type.toLowerCase()}timerbar`].growdirection)){
+					case 1:{
+						// Down
+						left = left - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20);
+						top = top + (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4);
+						break;
+					}
+					case 2:{
+						// Up
+						left = left - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20);
+						top = top - (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4);
+						break;
+					}
+					case 3:{
+						// Left
+						top = top - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4);
+						left = left - (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20);
+						break;
+					}
+					case 4:{
+						// Right
+						top = top - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 4);
+						left = left + (currentSettings[`${ability.type.toLowerCase()}timerbar`].padding * ability.order) - (currentSettings[`${ability.type.toLowerCase()}timerbar`].scale * 20);
+						break;
+					}
+					}
+
+					$(selectorImage).css("left", left);
+					$(selectorImage).css("top", top);
 				}
 			}
 			if(activeCountdowns.has(selectorBar)) clearInterval(activeCountdowns.get(selectorBar));
@@ -1070,6 +1166,7 @@ function handleEffect(parameters){
 	}
 }
 
+/* exported handleSkill */
 function handleSkill(parameters){
 	let byYou = (parameters.player === currentPlayer.name);
 	let onYou = false;
@@ -1151,9 +1248,15 @@ function handleSkill(parameters){
 </script>
 <body>
 	<canvas id="grid"></canvas>
-	<img id="dot-image" class="small-image" /><progress width="154" height="15" id="dot-timer-bar" class="bar styled-bar" value="10" data-label="DoT Timers Anchor"></progress>
-	<img id="buff-image" class="small-image" /><progress width="154" height="15" id="buff-timer-bar" class="bar styled-bar" value="10" data-label="Buff Timers Anchor"></progress>
-	<div id="stacks-bar" data-label="Job Stacks Anchor" style="padding-left: 10px">
+	<div id="dot-bar" style="padding-left: 10px">
+		<img id="dot-image" class="small-image" />
+		<progress width="154" height="15" id="dot-timer-bar" class="bar styled-bar" value="10" data-label="DoT Timers Anchor"></progress>
+	</div>
+	<div id="buff-bar" style="padding-left: 10px">
+		<img id="buff-image" class="small-image" />
+		<progress width="154" height="15" id="buff-timer-bar" class="bar styled-bar" value="10" data-label="Buff Timers Anchor"></progress>
+	</div>
+	<div id="stacks-bar" style="padding-left: 10px">
 		<div id="stacks-background-1" class="stack-background stack-hidden"><img id="stacks-1" class="stack-color" src="skins/material-dark/images/arrow-fill-empty.png" /></div>
 		<div id="stacks-background-2" class="stack-background stack-hidden"><img id="stacks-2" class="stack-color" src="skins/material-dark/images/arrow-fill-empty.png" /></div>
 		<div id="stacks-background-3" class="stack-background stack-hidden"><img id="stacks-3" class="stack-color" src="skins/material-dark/images/arrow-fill-empty.png" /></div>
@@ -1163,5 +1266,5 @@ function handleSkill(parameters){
 	<div id="mitigation-bar" style="position: absolute;"></div>
 	<progress width="154" height="15" id="timer-bar" class="bar styled-bar" value="10" data-label="Pulltimer"></progress>
 	<progress width="154" height="15" id="health-bar" class="bar styled-bar" value="1" data-label="10000 / 10000"></progress>
-	<progress width="154" height="15" id="mana-bar" class="bar styled-bar" value="1" data-label="10000 / 10000"></progress>
+	<progress width="154" height="15" id="mana-bar" class="bar styled-bar" value="1" data-label="10000 / 10000"></progress>	
 </body>
